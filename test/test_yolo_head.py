@@ -7,23 +7,29 @@ from models.yolo_head import *
 
 import numpy as np
 
-if __name__ == '__main__':
-    data1 = paddle.to_tensor(np.random.randn(3, 256, 128, 128), dtype='float32')
-    data2 = paddle.to_tensor(np.random.randn(3, 512, 64, 64), dtype='float32')
-    data3 = paddle.to_tensor(np.random.randn(3, 768, 32, 32), dtype='float32')
-    data4 = paddle.to_tensor(np.random.randn(3, 1024, 16, 16), dtype='float32')
-    test_data = [data1, data2, data3, data4]
-    head  = Detect_head(anchors=([
-                [ 19,27,  44,40,  38,94 ],
-                [ 96,68,  86,152,  180,137 ],
-                [ 140,301,  303,264,  238,542 ],
-                [ 436,615,  739,380,  925,792 ],
-    ]), ch=[256, 512, 768, 1024])
-
-    result = head(test_data)
-
+def test_yolo_ahead():
+    data1  = paddle.to_tensor(np.random.randn(4, 512, 64, 64), dtype='float32')    #end_layer
+    data2  = paddle.to_tensor(np.random.randn(4, 512, 64, 64), dtype='float32')    #p5
+    data3  = paddle.to_tensor(np.random.randn(4, 256, 128, 128), dtype='float32')   #p4
+    data4  = paddle.to_tensor(np.random.randn(4, 128, 256, 256), dtype='float32')   #p3
+    inputs = [data1, data2, data3, data4]
+    model  = Yolo_ahead(512)
+    result = model(inputs)
     print(result[0].shape)
-    print(result[1][0].shape)
-    print(result[1][1].shape)
-    print(result[1][2].shape)
-    print(result[1][3].shape)
+    print(result[1].shape)
+    print(result[2].shape)
+    detect = Detect_head(anchors=(
+                                [10,13, 16,30, 33,23],  # P3/8
+                                [30,61, 62,45, 59,119],  # P4/16
+                                [116,90, 156,198, 373,326]  # P5/32
+    ), ch=[128, 256, 512])
+    result2 = detect(result)
+    print(result2[0].shape)
+    print(result2[1][0].shape)
+    print(result2[1][1].shape)
+    print(result2[1][2].shape)
+
+
+
+if __name__ == '__main__':
+    test_yolo_ahead()

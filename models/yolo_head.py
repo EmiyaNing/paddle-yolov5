@@ -1,6 +1,66 @@
+import sys
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+sys.path.append('..')
+from models.common import *
+
+class Yolo_ahead(nn.Layer):
+    def __init__(self, end_channel):
+        '''
+            The channel_list represent the backbone's output layer channels.
+            If the backbone output the p5(32 times), p4(16 times), p3(8 times)
+        '''
+        super().__init__()
+        self.conv1   = nn.Conv2D(end_channel, 256, kernel_size=1, stride=1)
+        self.up1     = nn.UpsamplingNearest2D(scale_factor=2)
+        self.cblock1 = C3(512, 256, shortcut=False)
+
+        self.conv2   = nn.Conv2D(256, 128, kernel_size=1, stride=1)
+        self.up2     = nn.UpsamplingNearest2D(scale_factor=2)
+        self.cblock2 = C3(256, 128, shortcut=False)
+
+        self.conv3   = nn.Conv2D(128, 256, kernel_size=3, stride=2, padding=1)
+        self.cblock3 = C3(512, 256, shortcut=False)
+
+        self.conv4   = nn.Conv2D(256, 256, kernel_size=3, stride=2, padding=1)
+        self.cblock4 = C3(768, 512, shortcut=False)
+
+
+    def forward(self, inputs):
+        '''
+            paramaters:
+                inputs: a tensor list of backbone's input.
+                        the element should be [end_output, p5(32 times), p4(16 times), p3(8 times)]
+        '''
+        x = inputs[0]
+        x = self.conv1(x)
+        x = self.up1(x)
+        x = paddle.concat([x, inputs[2]], axis=1)
+        x = self.cblock1(x)
+        temp = x
+
+        x = self.conv2(x)
+        x = self.up2(x)
+        x = paddle.concat([x, inputs[3]], axis=1)
+        x = self.cblock2(x)
+        res1 = x
+        
+        x = self.conv3(x)
+        x = paddle.concat([x, temp], axis=1)
+        x = self.cblock3(x)
+        res2 = x
+
+        x = self.conv4(x)
+        x = paddle.concat([x, inputs[1]], axis=1)
+        x = self.cblock4(x)
+        res3 = x
+
+        return [res1, res2, res3]
+
+
+
+
 
 class Detect_head(nn.Layer):
     '''
@@ -9,7 +69,7 @@ class Detect_head(nn.Layer):
     '''
     # the stride represent the downsize time...
     # the first stride = 8, represent the first outputhead will output the map with origin_high/8
-    stride = [8, 16, 32, 64]
+    stride = [8, 16, 32]
 
     def __init__(self, 
                  number_class=80, 
