@@ -15,6 +15,9 @@ class SiLU(nn.Layer):
     def forward(self, inputs: paddle.Tensor):
         return inputs * F.sigmoid(inputs)
 
+def DWConv(c1, c2, k=1, s=1, act=True):
+    return Conv(c1, c2, k, s, g=math.gcd(c1, c2), act=act)
+
 class Conv(nn.Layer):
     # Conv2D + BatchNorm2D + SiLU
     def __init__(self,
