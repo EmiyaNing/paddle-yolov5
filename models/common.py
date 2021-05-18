@@ -1,3 +1,4 @@
+import math
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
@@ -131,3 +132,18 @@ class Focus(nn.Layer):
             x(b, c, w, h)->y(b, 4c, w/2, h/2)
         '''
         return self.conv(paddle.concat([x[:, :, ::2, ::2], x[:, :, 1::2, ::2], x[:, :, ::2, 1::2], x[:, :, 1::2, 1::2]], axis=1))
+
+class NMS(nn.Layer):
+    '''
+        Non-Maximum Suppression module
+    '''
+    conf    = 0.25 # confidence threshold
+    iou     = 0.45 # IoU threshold
+    classes = None # filter by class
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        pass
+        
