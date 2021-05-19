@@ -1,7 +1,11 @@
+import sys
 import math
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+sys.path.append("..")
+from utils.general import non_max_suppression
+
 
 def autopad(k, p=None):
     if p is None:
@@ -30,8 +34,8 @@ class Conv(nn.Layer):
                  g=1,               # groups
                  act=True):
         super().__init__()
-        self.conv = nn.Conv2D(c1, c2, k, s, autopad(k, p), groups=g)
-        self.bn   = nn.BatchNorm2D(c2)
+        self.conv = nn.Conv2D(c1, c2, k, s, autopad(k, p), groups=g, weight_attr=nn.initializer.KaimingNormal())
+        self.bn   = nn.BatchNorm2D(c2, momentum=0.03, epsilon=1e-3)
         self.act  = SiLU() if act is True else None
 
     def forward(self, x):
@@ -73,10 +77,10 @@ class BottleneckCSP(nn.Layer):
         super().__init__()
         c_       = int(c2 * e)
         self.cv1 = Conv(c1, c_, 1, 1)
-        self.cv2 = nn.Conv2D(c1, c_, 1, 1)
-        self.cv3 = nn.Conv2D(c_, c_, 1, 1)
+        self.cv2 = nn.Conv2D(c1, c_, 1, 1,weight_attr=nn.initializer.KaimingNormal())
+        self.cv3 = nn.Conv2D(c_, c_, 1, 1,weight_attr=nn.initializer.KaimingNormal())
         self.cv4 = Conv(2 * c_, c2, 1, 1)
-        self.bn  = nn.BatchNorm2D(2 * c_)
+        self.bn  = nn.BatchNorm2D(2 * c_, momentum=0.03, epsilon=1e-3)
         self.act = nn.LeakyReLU(0.1)
         self.m   = nn.Sequential(*[Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)])
 
@@ -139,11 +143,10 @@ class NMS(nn.Layer):
     '''
     conf    = 0.25 # confidence threshold
     iou     = 0.45 # IoU threshold
-    classes = None # filter by class
+    max_det = 1000
 
     def __init__(self):
         super().__init__()
 
     def forward(self, x):
-        pass
-        
+        return non_max_suppression(x[0], self.conf, iou_thres = self.iou, max_det=self.max_det)

@@ -4,6 +4,7 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 sys.path.append("..")
 from models.yolo_head import *
+from models.Yolo import *
 
 import numpy as np
 
@@ -29,7 +30,13 @@ def test_yolo_ahead():
     print(result2[1][1].shape)
     print(result2[1][2].shape)
 
+def test_yolo():
+    data  = paddle.to_tensor(np.random.rand(4, 3, 224, 224), dtype='float32')
+    model = Yolo()
+    result = model(data, augment=True)
+    print(result[0].shape)
 
 
 if __name__ == '__main__':
-    test_yolo_ahead()
+    #test_yolo_ahead()
+    test_yolo()
