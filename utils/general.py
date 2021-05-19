@@ -244,8 +244,10 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45,  multi_labe
     n      = prediction.shape[0]
     bboxes = prediction[:, :, :4]
     bboxes = xywh2xyxy(bboxes)
-    scores = prediction[:, :, 5:] * prediction[:, :, 4]
-    scores = paddle.transpose(scores, shape=[0, 2, 1])
-    output = paddle.fluid.multiclass_nms(bboxes, scores, score_threshold=conf_thres, nms_threshold=iou_thres, keep_top_k=max_det)
+    shape  = prediction[:, :, 5:].shape
+    temp2  = paddle.unsqueeze(prediction[:, :, 4], axis=-1)
+    scores = prediction[:, :, 5:] * temp2
+    scores = paddle.transpose(scores, perm=[0, 2, 1])
+    output = paddle.fluid.layers.multiclass_nms(bboxes, scores, score_threshold=conf_thres, nms_top_k=5,nms_threshold=iou_thres, keep_top_k=max_det)
     return output
 

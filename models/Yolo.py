@@ -46,11 +46,12 @@ class Yolo(nn.Layer):
         p = paddle.concat([x, y, wh, p[:, :, 4:]], axis=-1)
         return p 
 
-    def forward_once(self, inputs):
+    def forward_once(self, inputs, nms):
         x = self.backbone(inputs)
         x = self.yolo_head(x)
         x = self.detect(x)
-        #x = self.nms(x)
+        if nms:
+            x = self.nms(x)
         return x
 
 
@@ -62,17 +63,17 @@ class Yolo(nn.Layer):
         y        = []
         for si, fi in zip(s, f):
             xi   = scale_img(paddle.flip(x, axis=[fi]) if fi else x, si, gs=int(max(self.stride)))
-            yi   = self.forward_once(xi)[0]
+            yi   = self.forward_once(xi, nms=False)[0]
             yi   = self._descale_pred(yi, fi, si, img_size)
             y.append(yi)
         # augmented inference, train
-        return paddle.concat(y, axis=1), None 
+        return paddle.concat(y, axis=1)
     
-    def forward(self, x, augment=False):
+    def forward(self, x, augment=False, nms=False):
         '''
             Use the augment forward or just forward once..
         '''
         if augment:
             return self.forward_augment(x)
         else:
-            return self.forward_once(x)
+            return self.forward_once(x, nms=nms)
