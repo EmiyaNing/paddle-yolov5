@@ -2,6 +2,7 @@ import sys
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+import numpy as np
 sys.path.append("..")
 
 from utils.general import bbox_iou
@@ -96,9 +97,56 @@ class ComputeLoss:
         self.balance =  [4.0, 1.0, 0.4]
         self.ssi     = [8, 16, 32].index(16) if autobalance else 0
         self.anchor_t= 2.9
+        self.gr      = 1.0
+        self.BCEcls  = BCEcls
+        self.BCEobj  = BCEobj
+        self.autobalance = autobalance
+        self.box_weight  = 0.0296
+        self.obj_weight  = 0.301
+        self.cls_weight  = 0.243
 
     def __call__(self, p, targets):
-        pass
+        lcls, lbox, lobj  = paddle.zeros([1]), paddle.zeros([1]), paddle.zeros([1])
+        tcls, tbox, indices, anchor = self.build_targets(p, targets)
+
+        for i, pi in enumerate(p):
+            b, a, gj, gi = indices[i]
+            tobj         = paddle.zeros_like(pi[:, :, :, :, 0]).numpy()
+            n            = b.shape[0]
+            if n:
+                ps       = paddle.to_tensor(pi.numpy()[b.numpy(), a.numpy(), gj.numpy(), gi.numpy()], dtype='float32')
+
+                pxy      = F.sigmoid(ps[:, :2]) * 2. - 0.5
+                pwh      = (F.sigmoid(ps[:, 2:4]) * 2.) ** 2 * anchor[i]
+                pbox     = paddle.concat((pxy, pwh), axis=1)
+                iou      = bbox_iou(paddle.t(pbox), tbox[i], x1y1x2y2=False, CIoU=True)
+                lbox    += paddle.mean(1.0 - iou)
+
+                tobj[b.numpy(), a.numpy(), gj.numpy(), gi.numpy()] = (1.0 - self.gr) + self.gr * paddle.cast(paddle.clip(iou, 0), dtype=tobj.dtype).numpy()
+
+                if self.det.number_class > 1:
+                    t    = paddle.full_like(ps[:, 5:], self.cn).numpy()
+                    t[range(n), tcls[i].numpy()] = self.cp
+                    lcls += self.BCEcls(ps[:, 5:], paddle.to_tensor(t))
+            tobj = paddle.to_tensor(tobj)
+            obji = self.BCEobj(pi[:, :, :, :, 4], tobj)
+            lobj += obji * self.balance[i]
+            if self.autobalance:
+                self.balance[i] = self.balance[i] * 0.9999 + 0.0001/ obji.numpy()
+            
+        if self.autobalance:
+            self.balance = [x / self.balance[self.ssi] for x in self.balance]
+        lbox  *= self.box_weight
+        lobj  *= self.obj_weight
+        lcls  *= self.cls_weight
+
+        bs     = tobj.shape[0]
+
+        loss   = lbox + lobj + lcls
+
+        return loss * bs, paddle.concat((lbox, lobj, lcls, loss))
+
+
 
 
     def build_targets(self, p, targets):
@@ -188,14 +236,13 @@ class ComputeLoss:
             if not no_target:
                 bc   = t[:, :2]
                 #b, c = t.numpy().T[: , :2]
-                b    = bc[:, 0]
-                c    = bc[:, 1]
-                bc   = paddle.t(bc)
+                b    = paddle.cast(bc[:, 0], dtype='int64')
+                c    = paddle.cast(bc[:, 1], dtype='int64')
                 gxy  = t[:, 2:4]
                 gwh  = t[:, 4:6]
-                gij  = (gxy - offsets)
+                gij  = paddle.cast((gxy - offsets), dtype='int64')
                 gi, gj = paddle.t(gij)
-                a    = t[:, 6]
+                a    = paddle.cast(t[:, 6], dtype='int64')
                 indices.append((b, a, paddle.clip(gj,0, gain[3]-1), paddle.clip(gi, 0, gain[2]-1)))
                 tbox.append(paddle.concat((gxy - gij, gwh), axis=1))
                 anchor.append(paddle.to_tensor(anchors.numpy()[a.numpy().astype(int)]))

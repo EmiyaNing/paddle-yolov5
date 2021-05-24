@@ -81,7 +81,11 @@ if __name__ == '__main__':
     pred = [p3, p4, p5]
     targets = torch.tensor(np.random.rand(88, 6))
     tcls, tbox, indices, anch = build_targets(pred, targets)
-    print(tcls[1].shape)
-    print(tbox[1].shape)
-    print(anch[1].shape)
+    print(tcls[0].dtype)
+    print(tbox[0].dtype)
+    print(indices[0][0].dtype)
+    print(indices[0][1].dtype)
+    print(indices[0][2].dtype)
+    print(indices[0][3].dtype)
+    print(anch[0].dtype)
 
