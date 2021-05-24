@@ -63,14 +63,14 @@ class QFocalLoss(nn.Layer):
         super().__init__()
         self.loss_fcn = loss_fcn
         self.alpha    = alpha
-        self.reduction= loss_function.reduction
+        self.reduction= loss_fcn.reduction
         self.loss_fcn.reduction = 'none'
 
     def forward(self, pred, true):
         loss      = self.loss_fcn(pred, true)
-        preb_prob = F.sigmoid(preb)
+        preb_prob = F.sigmoid(pred)
         alpha_factor      = true * self.alpha + (1 - true) * (1 - self.alpha)
-        modulating_factor = paddle.abs(true - pred_prob) ** self.gamma
+        modulating_factor = paddle.abs(true - preb_prob) ** self.gamma
         loss     *= alpha_factor * modulating_factor
 
         if self.reduction == 'mean':
