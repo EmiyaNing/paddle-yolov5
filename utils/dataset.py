@@ -58,7 +58,8 @@ class VocDataset(Dataset):
             Load image and labels by index.
             Return paddle.to_tensor(image), paddle.to_tensor(labels), shapes
         '''
-        mosaic = self.mosaic and random.random() < 1.0        
+        mosaic = self.mosaic and random.random() < 1.0       
+        print(mosaic)
         if mosaic:
             img, labels = self.load_mosaic(index)
             shapes      = None
@@ -67,31 +68,31 @@ class VocDataset(Dataset):
                 img2, labels2 = self.load_mosaic(random.randint(0, self.number - 1))
                 r             = np.random.beta(8.0, 8.0)
                 img           = (img * r + img2 * (1 - r)).astype(np.uint8)
-                labels        = paddle.concat((labels, labels2), axis=0)
+                labels        = np.concatenate((labels, labels2), axis=0)
         else:
-            img, (h, w), ratio = self.load_image(index)
-            original_shape     = (h, w)
+            img, (h, w)        = self.load_image(index)
             shape              = self.img_size
             img, ratio, pad    = letterbox(img, shape, auto=False, scaleup=self.augment)
             shapes             = (self.img_size, self.img_size), ((h / self.img_size, w / self.img_size), pad)
             labels             = self.load_label(index)
-            labels[:, 1:]      = xyxy2xywh(labels[:, 1:])
-            labels[:, 1:]      = xywhn2xyxy(labels[:, 1:], ratio[0], ratio[1], padw=pad[0], padh=pad[1])
+            if labels.size:
+                labels[:, 1:]      = xyxy2xywh(labels[:, 1:])
+                labels[:, 1:]      = xywhn2xyxy(labels[:, 1:], ratio[0] * img.shape[0], ratio[1] * img.shape[1], padw=pad[0], padh=pad[1])
 
         
 
         if self.augment:
             if not mosaic:
                 img, labels = random_perspective(img, labels, degrees=0.373, translate=0.245, shear=0.602, perspective=0.0)
-                augment_hsv(img, hgain=0.0138, sgain=0.664, vgain=0.464)
+                self.augment_hsv(img, hgain=0.0138, sgain=0.664, vgain=0.464)
 
         nL  = len(labels)
         if nL:
 
             labels          = labels.astype(np.float32)
             labels[:, 1:5]  = xyxy2xywh(labels[:, 1:5])
-            labels[:,[2,4]] = labels[:,[2,4]] / original_shape[0]
-            labels[:,[1,3]] = labels[:,[2,4]] / original_shape[1]
+            labels[:,[2,4]] = labels[:,[2,4]] / img.shape[0]
+            labels[:,[1,3]] = labels[:,[2,4]] / img.shape[1]
 
         if self.augment:
             if random.random() < 0.00856:
@@ -129,7 +130,7 @@ class VocDataset(Dataset):
         ratio = self.img_size / max(h,w)
         if ratio != 1:
             image = cv2.resize(image, (self.img_size, self.img_size), interpolation=cv2.INTER_AREA if ratio < 1 and not self.augment else cv2.INTER_LINEAR)
-        return image, (h, w), ratio
+        return image, (h, w)
 
     def load_label(self, index):
         '''
@@ -143,26 +144,28 @@ class VocDataset(Dataset):
         collection = label_file.documentElement
         objects    = collection.getElementsByTagName("object")
         sizes      = collection.getElementsByTagName("size")
+        h          = int(sizes[0].getElementsByTagName("height")[0].childNodes[0].data)
+        w          = int(sizes[0].getElementsByTagName("width")[0].childNodes[0].data)
 
         list       = []
         for object in objects:
             name = object.getElementsByTagName("name")[0].childNodes[0].data 
-            x1   = object.getElementsByTagName("xmin")[0].childNodes[0].data
-            y1   = object.getElementsByTagName("ymin")[0].childNodes[0].data
-            x2   = object.getElementsByTagName("xmax")[0].childNodes[0].data
-            y2   = object.getElementsByTagName("ymax")[0].childNodes[0].data
-            temp = np.array([index, x1, y1, x2, y2], dtype='int64')
+            x1   = float(object.getElementsByTagName("xmin")[0].childNodes[0].data) / w
+            y1   = float(object.getElementsByTagName("ymin")[0].childNodes[0].data) / h
+            x2   = float(object.getElementsByTagName("xmax")[0].childNodes[0].data) / w
+            y2   = float(object.getElementsByTagName("ymax")[0].childNodes[0].data) / h
+            temp = np.array([index, x1, y1, x2, y2], dtype='float32')
             list.append(temp)
         return np.array(list)
 
 
-    def augment_hsv(self, image, hgain=0.5, sgain=0.5, vgain=0.5):
+    def augment_hsv(self, img, hgain=0.5, sgain=0.5, vgain=0.5):
         '''
             Augment the image in image's hsv format.
         '''
         r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1
-        hue, sat, val = cv2.split(cv2.cvtColor(image, cv2.COLOR_BGR2HSV))
-        dtype   = image.dtype
+        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
+        dtype   = img.dtype
         x       = np.arange(0, 256, dtype=np.int16)
         lut_hue = ((x * r[0]) % 180).astype(dtype)
         lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
@@ -192,7 +195,8 @@ class VocDataset(Dataset):
         yc, xc  = [int(random.uniform(-x, 2*s + x)) for x in self.mosaic_border]
         indices = [index] + random.choices(self.indices, k=3)
         for i,index in enumerate(indices):
-            image, (h, w) = self.load_image(index)
+            img, original_shape = self.load_image(index)
+            h, w = img.shape[:2]
 
             if i == 0:  # top left
                 img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
@@ -211,10 +215,11 @@ class VocDataset(Dataset):
             padw = x1a - x1b
             padh = y1a - y1b
             labels = self.load_label(index)
+            labels[:, 1:] = xyxy2xywh(labels[:, 1:])
             labels[:, 1:] = xywhn2xyxy(labels[:, 1:], w, h, padw, padh)
             labels4.append(labels)
         
-        labels4 = np.concat(labels4, axis=0)
+        labels4 = np.concatenate(labels4, axis=0)
         labels4[:, 1:] = np.clip(labels4[:, 1:], 0, 2*s)
         return img4, labels4
             
@@ -305,11 +310,10 @@ def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1, eps=1e-16):  #
     ar = np.maximum(w2 / (h2 + eps), h2 / (w2 + eps))  # aspect ratio
     return (w2 > wh_thr) & (h2 > wh_thr) & (w2 * h2 / (w1 * h1 + eps) > area_thr) & (ar < ar_thr)  # candidates
 
-def random_perspective(img, targets=(), degress=10, translate=.1, scale=.1, shear=10, perspective=0.0, border=(0, 0)):
+def random_perspective(img, targets=(), degrees=10, translate=.1, scale=.1, shear=10, perspective=0.0, border=(0, 0)):
     height = img.shape[0] + border[0] * 2
     width  = img.shape[1] + border[1] * 2
 
-    targets = targets.numpy()
     # Used to get the center 
     C      = np.eye(3)
     C[0, 2]= -img.shape[1] / 2
@@ -322,7 +326,7 @@ def random_perspective(img, targets=(), degress=10, translate=.1, scale=.1, shea
 
     # This matrix used to rotation and scale
     R      = np.eye(3)
-    a      = random.uniform(-degress, degress)
+    a      = random.uniform(-degrees, degrees)
     s      = random.uniform(1 - scale, 1 + scale)
     R[:2]  = cv2.getRotationMatrix2D(angle=a, center=(0,0), scale=s)
 
@@ -343,7 +347,7 @@ def random_perspective(img, targets=(), degress=10, translate=.1, scale=.1, shea
         if perspective:
             img = cv2.warpPerspective(img, M, dsize=(width, height), borderValue=(114, 114, 114))
         else:
-            img = cv2.warpAffine(img, M, dsize=(width, height), borderValue=(114, 114, 114))
+            img = cv2.warpAffine(img, M[:2], dsize=(width, height), borderValue=(114, 114, 114))
 
     n      = len(targets)
     if n:
