@@ -13,6 +13,19 @@ from paddle.io import DataLoader
 
 from xml.dom.minidom import parse
 
+def create_dataloader(path, img_size, batch_size, stride, word_size=1,augment=False, workers=8):
+    dataset    = VocDataset(path, img_size, batch_size, stride, augment)
+    batch_size = min(batch_size, len(dataset))
+    nw         = min([os.cpu_count() // word_size, batch_size if batch_size > 1 else 0, workers])
+    dataloader     = DataLoader(dataset,
+                                batch_size=batch_size,
+                                num_workers=nw,
+                                collate_fn=VocDataset.collate_fn)
+    return dataloader, dataset
+
+
+
+
 class VocDataset(Dataset):
     def __init__(self, path, img_size=224, batch_size=16, stride=32, augment=False):
         '''
@@ -267,6 +280,13 @@ class VocDataset(Dataset):
         labels9[:, [1, 3]] -= xc
         labels9[:, [2, 4]] -= yc
         return img9, labels9
+    
+    @staticmethod
+    def collate_fn(batch):
+        img, label, path, shapes = zip(*batch)  # transposed
+        for i, l in enumerate(label):
+            l[:, 0] = i  # add target image index for build_targets()
+        return paddle.stack(img, 0), paddle.concat(label, 0), path, shapes
 
 
 def letterbox(img, new_shape=(224, 224), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
