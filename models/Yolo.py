@@ -16,8 +16,8 @@ class Yolo(nn.Layer):
         super().__init__()
         self.backbone  = CSPNet(output_stride=(8, 16, 32), 
                                channel_list=(64, 128, 256, 512, 1024), 
-                               depth=0.33,
-                               width=0.5)
+                               depth=depth,
+                               width=width)
         self.yolo_head = Yolo_ahead(end_channel=1024 * width, 
                                     channel_list=[512, 256, 512, 512],
                                     width=width)
