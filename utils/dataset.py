@@ -229,7 +229,8 @@ class VocDataset(Dataset):
         s       = self.img_size
         indices = [index] + random.choices(self.indices, k=8)
         for i, index in enumerate(indices):
-            img, (h,w) = self.load_image(index)
+            img, original_shape = self.load_image(index)
+            h, w = img.shape[:2]
             if i == 0:  # center
                 img9 = np.full((s * 3, s * 3, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
                 h0, w0 = h, w
