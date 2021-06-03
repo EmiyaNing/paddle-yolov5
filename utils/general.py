@@ -102,6 +102,9 @@ def clip_coords(boxes, img_shape):
     boxes[:, 3] = paddle.clip(boxes[:, 3], min=0, max=img_shape[0])
     
 def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
+    '''
+        Rescale coords (xyxy) from img1_shape to img0_shape
+    '''
     if ratio_pad is None:
         gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
         pad  = (img1_shape[1] - img0_shape[1] * gain)/2 , (img1_shape[0] - img0_shape[0] * gain) /2
@@ -244,10 +247,19 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45,  multi_labe
     n      = prediction.shape[0]
     bboxes = prediction[:, :, :4]
     bboxes = xywh2xyxy(bboxes)
-    shape  = prediction[:, :, 5:].shape
+    list_boxex = paddle.unbind(bboxes, axis=0)
     temp2  = paddle.unsqueeze(prediction[:, :, 4], axis=-1)
     scores = prediction[:, :, 5:] * temp2
     scores = paddle.transpose(scores, perm=[0, 2, 1])
-    output = paddle.fluid.layers.multiclass_nms(bboxes, scores, score_threshold=conf_thres, nms_top_k=5,nms_threshold=iou_thres, keep_top_k=max_det)
+    list_scores = paddle.unbind(scores, axis=0)
+    output = []
+    for i in range(len(list_boxex)):
+        temp_out = paddle.fluid.layers.multiclass_nms(paddle.unsqueeze(list_boxex[i], axis=0), paddle.unsqueeze(list_scores[i], axis=0), score_threshold=conf_thres, nms_top_k=5,nms_threshold=iou_thres, keep_top_k=max_det)
+        if temp_out.shape != [1, 1]:
+            list     = paddle.unbind(temp_out, axis=1)
+            temp_out = paddle.stack([list[2], list[3], list[4], list[5], list[1], list[0]], axis=1)
+            output.append(temp_out)
+        else:
+            output.append(paddle.zeros([0,6]))
     return output
 

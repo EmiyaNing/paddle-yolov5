@@ -42,7 +42,7 @@ def test_yolo():
 def test_yolo_augment():
     data  = paddle.to_tensor(np.random.rand(4, 3, 224, 224), dtype='float32')
     model = Yolo()
-    result = model(data, augment=True)
+    result = model(data, augment=True)[0]
     print(result.shape)
 
 def test_yolo_nms():

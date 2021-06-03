@@ -1,3 +1,7 @@
+'''
+    This file implement yolo v5's backbone.
+    The normal size backbone have 30 layers.
+'''
 import sys
 import paddle
 import paddle.nn as nn

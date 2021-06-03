@@ -222,6 +222,16 @@ class ComputeLoss:
                     zeros   = paddle.unsqueeze(paddle.zeros_like(gxy), axis=0)
                     off     = paddle.unsqueeze(off, axis=1)
                     offsets = zeros + off
+                    print('offsets.shape = ',offsets.shape)
+                    print('j.shape       = ',j.shape)
+                    if len(offsets.shape) == 4:
+                        print('Error information....')
+                        print('p.shape      = ',p[0].shape)
+                        print('target.shape = ', targets.shape)
+                        print('t.shape      = ', t.shape)
+                        print('r.shape      = ', r.shape)
+
+                    
                     offsets = paddle.to_tensor(offsets.numpy()[j.numpy()], dtype='float32')
                 else:
                     no_target = True

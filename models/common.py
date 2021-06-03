@@ -1,3 +1,6 @@
+'''
+    This file implement some basic module, which will be used in the yolo v5 models.....
+'''
 import sys
 import math
 import paddle
@@ -8,19 +11,31 @@ from utils.general import non_max_suppression
 
 
 def autopad(k, p=None):
+    '''
+        This function used to caculate the padding edge.
+    '''
     if p is None:
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]
     return p
 
 
 class SiLU(nn.Layer):
+    '''
+        This class implement the SiLU activation function.
+    '''
     def __init__(self):
         super().__init__()
     
     def forward(self, inputs: paddle.Tensor):
+        '''
+            X = X * sigmoid(X)
+        '''
         return inputs * F.sigmoid(inputs)
 
 def DWConv(c1, c2, k=1, s=1, act=True):
+    '''
+        Return a Depthwise Convolution operation...
+    '''
     return Conv(c1, c2, k, s, g=math.gcd(c1, c2), act=act)
 
 class Conv(nn.Layer):
@@ -61,6 +76,7 @@ class Bottleneck(nn.Layer):
         self.add = shortcut and c1 == c2
 
     def forward(self, x):
+        # A simplest resnet block.
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
 
 

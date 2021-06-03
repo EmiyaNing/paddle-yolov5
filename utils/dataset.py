@@ -13,14 +13,17 @@ from paddle.io import DataLoader
 
 from xml.dom.minidom import parse
 
+names = [ 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog',
+         'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor' ]
+
 def create_dataloader(path, img_size, batch_size, stride, word_size=1,augment=False, workers=8):
     dataset    = VocDataset(path, img_size, batch_size, stride, augment)
     batch_size = min(batch_size, len(dataset))
     nw         = min([os.cpu_count() // word_size, batch_size if batch_size > 1 else 0, workers])
-    dataloader     = DataLoader(dataset,
-                                batch_size=batch_size,
-                                num_workers=nw,
-                                collate_fn=VocDataset.collate_fn)
+    dataloader = DataLoader(dataset,
+                            batch_size=batch_size,
+                            num_workers=nw,
+                            collate_fn=VocDataset.collate_fn)
     return dataloader, dataset
 
 
@@ -72,7 +75,6 @@ class VocDataset(Dataset):
             Return paddle.to_tensor(image), paddle.to_tensor(labels), shapes
         '''
         mosaic = self.mosaic and random.random() < 1.0       
-        print(mosaic)
         if mosaic:
             img, labels = self.load_mosaic(index)
             shapes      = None
@@ -89,9 +91,9 @@ class VocDataset(Dataset):
             shapes             = (self.img_size, self.img_size), ((h / self.img_size, w / self.img_size), pad)
             labels             = self.load_label(index)
             if labels.size:
-                labels[:, 1:]      = xyxy2xywh(labels[:, 1:])
-                labels[:, 1:]      = xywhn2xyxy(labels[:, 1:], ratio[0] * img.shape[0], ratio[1] * img.shape[1], padw=pad[0], padh=pad[1])
-
+                labels[:, 2:]      = xyxy2xywh(labels[:, 2:])
+                labels[:, 2:]      = xywhn2xyxy(labels[:, 2:], ratio[0] * img.shape[0], ratio[1] * img.shape[1], padw=pad[0], padh=pad[1])
+        
         
 
         if self.augment:
@@ -103,28 +105,28 @@ class VocDataset(Dataset):
         if nL:
 
             labels          = labels.astype(np.float32)
-            labels[:, 1:5]  = xyxy2xywh(labels[:, 1:5])
-            labels[:,[2,4]] = labels[:,[2,4]] / img.shape[0]
-            labels[:,[1,3]] = labels[:,[2,4]] / img.shape[1]
+            labels[:, 2:6]  = xyxy2xywh(labels[:, 2:6])
+            labels[:,[3,5]] = labels[:,[3,5]] / img.shape[0]
+            labels[:,[2,4]] = labels[:,[2,4]] / img.shape[1]
 
         if self.augment:
             if random.random() < 0.00856:
                 img = np.flipud(img)
                 if nL:
-                    labels[:, 2] = 1 - labels[:, 2]
+                    labels[:, 3] = 1 - labels[:, 3]
             
             if random.random() < 0.5:
                 img = np.fliplr(img)
                 if nL:
-                    labels[:, 1] = 1 - labels[:, 1]
+                    labels[:, 2] = 1 - labels[:, 2]
 
         labels_out = paddle.zeros((nL, 6))
         if nL:
-            labels_out[:, 1:] = paddle.to_tensor(labels)
+            labels_out = paddle.to_tensor(labels)
 
         img = img[:, :, ::-1].transpose(2, 0, 1)
         img = np.ascontiguousarray(img)
-        return paddle.to_tensor(img), labels_out, shapes
+        return paddle.to_tensor(img, dtype='float32'), labels_out, shapes
 
     def __len__(self):
         return len(self.image_path)
@@ -136,7 +138,7 @@ class VocDataset(Dataset):
             The return image's data type = np.uint8
         '''
         image_name = self.image_path[index].split("./")[1]
-        image_name = os.path.join('../data',image_name)
+        image_name = './data/' +  image_name
         image = cv2.imread(image_name)
         h,w   = image.shape[0], image.shape[1]
         assert image is not None, 'Image Not Found' + image_name
@@ -151,8 +153,9 @@ class VocDataset(Dataset):
             Return a 2 dimension tensor, whose shape is n * [index, class, x1, y1, x2, y2]
             Return type is numpy.int64
         '''
+        global names
         label_name = self.label_path[index].split("./")[1]
-        label_name = os.path.join('../data',label_name)
+        label_name = './data/' + label_name
         label_file = parse(label_name)
         collection = label_file.documentElement
         objects    = collection.getElementsByTagName("object")
@@ -163,11 +166,12 @@ class VocDataset(Dataset):
         list       = []
         for object in objects:
             name = object.getElementsByTagName("name")[0].childNodes[0].data 
+            label= names.index(name)
             x1   = float(object.getElementsByTagName("xmin")[0].childNodes[0].data) / w
             y1   = float(object.getElementsByTagName("ymin")[0].childNodes[0].data) / h
             x2   = float(object.getElementsByTagName("xmax")[0].childNodes[0].data) / w
             y2   = float(object.getElementsByTagName("ymax")[0].childNodes[0].data) / h
-            temp = np.array([index, x1, y1, x2, y2], dtype='float32')
+            temp = np.array([index, label, x1, y1, x2, y2], dtype='float32')
             list.append(temp)
         return np.array(list)
 
@@ -283,10 +287,10 @@ class VocDataset(Dataset):
     
     @staticmethod
     def collate_fn(batch):
-        img, label, path, shapes = zip(*batch)  # transposed
+        img, label, shapes = zip(*batch)  # transposed
         for i, l in enumerate(label):
             l[:, 0] = i  # add target image index for build_targets()
-        return paddle.stack(img, 0), paddle.concat(label, 0), path, shapes
+        return paddle.stack(img, 0), paddle.concat(label, 0), shapes
 
 
 def letterbox(img, new_shape=(224, 224), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):

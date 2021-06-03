@@ -8,7 +8,9 @@ from utils.dataset import *
 def test_dataset():
     dataset = VocDataset("../data/train_list.txt", augment=True)
     for img, labels, shape in dataset:
+        print(img.shape)
         print(labels.shape)
 
 if __name__ == '__main__':
     test_dataset()
+

@@ -1,3 +1,9 @@
+'''
+    This file implement the Detect head.
+    The Detect head include a Conv head and a Operate Head.
+    The Conv head used to get some sub-layer's result.
+    The Operate head used to process the sub-layer's result and get output. 
+'''
 import sys
 import paddle
 import paddle.nn as nn
@@ -92,6 +98,10 @@ class Detect_head(nn.Layer):
         self.training      = False
 
     def initialize_biases(self, s):
+        '''
+            This function will return a initialized bias parameters.
+            The bias will be initialized by log function....
+        '''
         data = paddle.zeros(shape=[self.number_anchor, self.number_output])
         data[:, 4] += math.log(8 / (640 / s) ** 2)
         data[:, 5:] += math.log(0.6 / (self.number_class - 0.99))
@@ -115,6 +125,7 @@ class Detect_head(nn.Layer):
                     self.grid[i] = self._make_grid(nx, ny)
 
                 y = F.sigmoid(x[i])
+                # Noramlize the result.
                 y[:, :, :, :, 0:2] = (y[:, :, :, :, 0:2] * 2.0 - 0.5 + self.grid[i]) * self.stride[i]
                 y[:, :, :, :, 2:4] = (y[:, :, :, :, 2:4] * 2.0) ** 2 * self.anchor_grid[i]
             
@@ -124,5 +135,8 @@ class Detect_head(nn.Layer):
 
     @staticmethod
     def _make_grid(nx=20, ny=20):
+        '''
+            This function used to get a grid index...
+        '''
         yv, xv = paddle.meshgrid([paddle.arange(ny), paddle.arange(nx)])
         return paddle.cast(paddle.reshape(paddle.stack((xv, yv), 2), shape=[1, 1, ny, nx, 2]), dtype='float32')

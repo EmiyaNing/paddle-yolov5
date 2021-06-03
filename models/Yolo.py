@@ -12,7 +12,7 @@ class Yolo(nn.Layer):
     '''
         Top Level class of Yolo.
     '''
-    def __init__(self, depth=0.33, width=0.5):
+    def __init__(self, number_class=80,depth=0.33, width=0.5):
         super().__init__()
         self.backbone  = CSPNet(output_stride=(8, 16, 32), 
                                channel_list=(64, 128, 256, 512, 1024), 
@@ -21,7 +21,7 @@ class Yolo(nn.Layer):
         self.yolo_head = Yolo_ahead(end_channel=1024 * width, 
                                     channel_list=[512, 256, 512, 512],
                                     width=width)
-        self.detect    = Detect_head(number_class=80, 
+        self.detect    = Detect_head(number_class=number_class, 
                                      anchors=(
                                                 [10,13, 16,30, 33,23],  # P3/8
                                                 [30,61, 62,45, 59,119],  # P4/16
@@ -47,6 +47,9 @@ class Yolo(nn.Layer):
         return p 
 
     def forward_once(self, inputs, nms):
+        '''
+            Just forward once...
+        '''
         x = self.backbone(inputs)
         x = self.yolo_head(x)
         x = self.detect(x)
@@ -67,7 +70,7 @@ class Yolo(nn.Layer):
             yi   = self._descale_pred(yi, fi, si, img_size)
             y.append(yi)
         # augmented inference, train
-        return paddle.concat(y, axis=1)
+        return paddle.concat(y, axis=1), None
     
     def forward(self, x, augment=False, nms=False):
         '''
